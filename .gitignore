@@ -1,0 +1,21 @@
+# Secrets and runtime data: never commit
+.env
+data/
+*.sqlite
+*.sqlite-journal
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

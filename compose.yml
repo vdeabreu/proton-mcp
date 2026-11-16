@@ -1,0 +1,23 @@
+services:
+  proton-mcp:
+    build: .
+    container_name: proton-mcp
+    env_file: .env
+    # Host network so the container reaches Bridge on 127.0.0.1:1143/1025.
+    # The server itself listens on 127.0.0.1:8766 only; Apache is the public side.
+    network_mode: host
+    volumes:
+      - ./data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"

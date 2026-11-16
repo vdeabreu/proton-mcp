@@ -1,0 +1,14 @@
+# Caddy reverse proxy for the remote Proton Mail MCP server (HTTPS certificate is automatic).
+# Replace mcp.example.com with your domain.
+mcp.example.com {
+	# Only Anthropic's outbound ranges may call /mcp. OAuth endpoints stay open.
+	# Keep in sync with "Outbound IP addresses" on
+	# https://platform.claude.com/docs/en/api/ip-addresses (checked 2026-11).
+	@mcp_outside {
+		path /mcp /mcp/*
+		not remote_ip 160.79.104.0/21 153.61.208.0/20
+	}
+	respond @mcp_outside 403
+
+	reverse_proxy 127.0.0.1:8766
+}

@@ -1,0 +1,32 @@
+[project]
+name = "proton-mcp"
+version = "0.1.0"
+description = "MCP server for Proton Mail through Proton Mail Bridge (local stdio or remote claude.ai connector)"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = ["mcp==2.3.0"]
+
+[project.optional-dependencies]
+remote = ["uvicorn>=0.30"]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["proton_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "remote"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP"]
+ignore = ["E741"]  # short loop names like `l` in rendering helpers
