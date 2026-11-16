@@ -97,6 +97,7 @@ def audited(fn):
 for _fn in (core.list_folders, core.list_emails, core.search_emails, core.read_email):
     mcp.tool(annotations=core.READ_ONLY)(audited(_fn))
 if ENABLE_SEND:
+    mcp.tool(annotations=core.READ_ONLY)(audited(core.list_sender_addresses))
     mcp.tool(annotations=core.SENDS_MAIL)(audited(core.send_email))
 
 

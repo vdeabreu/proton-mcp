@@ -215,11 +215,82 @@ def test_sender_name_from_env(monkeypatch):
 
 def test_sender_name_lookup_failure_does_not_block(monkeypatch):
     monkeypatch.delenv("PROTON_SENDER_NAME", raising=False)
-    monkeypatch.setattr(p, "_sender_name_cache", {})
+    monkeypatch.setattr(p, "_sent_from_cache", [])
 
     def boom():
         raise ToolError("Bridge down")
 
     monkeypatch.setattr(p, "_imap", boom)
     assert p._sender_name(SENDER) is None
-    assert SENDER not in p._sender_name_cache
+    assert p._sent_from_cache == []  # not cached: retried next time
+
+
+# --- sender addresses ---
+
+ALIAS = "me@alias.org"
+
+
+@pytest.fixture
+def sent(monkeypatch):
+    """Pretend the Sent folder holds these From headers."""
+    headers = [f"Me <{ALIAS}>", f"Me <{ALIAS}>", "Me <me@third.net>", SENDER]
+    monkeypatch.setattr(p, "_sent_from_headers", lambda: headers)
+    monkeypatch.delenv("PROTON_FROM_ADDRESSES", raising=False)
+    monkeypatch.delenv("PROTON_SENDER_NAME", raising=False)
+    return headers
+
+
+def test_sender_addresses_login_first_then_by_use(sent):
+    assert p._sender_addresses(SENDER.upper()) == [SENDER, ALIAS, "me@third.net"]
+
+
+def test_sender_addresses_from_env(sent, monkeypatch):
+    monkeypatch.setenv("PROTON_FROM_ADDRESSES", "New <new@x.fr>, " + ALIAS)
+    assert p._sender_addresses(SENDER) == [SENDER, "new@x.fr", ALIAS, "me@third.net"]
+
+
+def test_choose_sender_accepts_own_address(sent):
+    assert p._choose_sender(SENDER, f"Me <{ALIAS.upper()}>", None) == ALIAS
+
+
+@pytest.mark.parametrize("bad", ["evil@attacker.com", "not an address", f"{ALIAS}\r\nBcc: x@y.fr"])
+def test_choose_sender_refuses_other_addresses(sent, bad):
+    with pytest.raises(ToolError):
+        p._choose_sender(SENDER, bad, None)
+
+
+def test_choose_sender_defaults_to_login(sent):
+    assert p._choose_sender(SENDER, None, None) == SENDER
+
+
+def test_reply_goes_out_from_the_address_that_received_it(sent):
+    original = _original()
+    original.replace_header("To", f"Someone <x@y.fr>, Me <{ALIAS}>")
+    assert p._choose_sender(SENDER, None, original) == ALIAS
+
+
+def test_reply_to_unknown_address_falls_back_to_login(sent):
+    original = _original()
+    original.replace_header("To", "list@lists.example.org")
+    assert p._choose_sender(SENDER, None, original) == SENDER
+
+
+def test_explicit_from_address_wins_over_reply_default(sent):
+    original = _original()
+    original.replace_header("To", ALIAS)
+    assert p._choose_sender(SENDER, SENDER, original) == SENDER
+
+
+def test_list_sender_addresses(sent, monkeypatch):
+    monkeypatch.setenv("PROTON_BRIDGE_USER", SENDER)
+    monkeypatch.setenv("PROTON_BRIDGE_PASSWORD", "p")
+    rows = p.list_sender_addresses()
+    assert [r["address"] for r in rows] == [SENDER, ALIAS, "me@third.net"]
+    assert rows[0]["default"] and not rows[1]["default"]
+    assert rows[1]["name"] == "Me"
+
+
+def test_message_id_uses_the_chosen_address_domain():
+    msg, _ = p._build_message(ALIAS, "a@b.fr", "Hi", "x", None, None, None, sender_name="Me")
+    assert msg["Message-ID"].endswith("@alias.org>")
+    assert msg["From"].addresses[0].addr_spec == ALIAS

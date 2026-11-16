@@ -32,7 +32,8 @@ Claude Desktop ──stdio──> proton_mcp.py ──IMAP/SMTP──> Bridge (1
 | `list_emails` | Latest emails of a folder, newest first (headers only). |
 | `search_emails` | Search by sender, recipient, subject, text, date range, unread. |
 | `read_email` | Full email: headers, text body (HTML converted to text), attachments list. |
-| `send_email` | Send or reply. Flagged destructive: clients ask before each call. |
+| `list_sender_addresses` | The addresses `send_email` can send from, with the display name used for each. |
+| `send_email` | Send or reply, from any of your addresses (`from_address`). Flagged destructive: clients ask before each call. |
 
 `send_email` takes a body in light Markdown: blank line = paragraph, `- ` bullets,
 `1. ` numbered lists, `**bold**`, `*italic*`, `[text](https://url)`. It is sent as
@@ -90,6 +91,7 @@ and restart Claude Desktop after editing the file.
 | `PROTON_SMTP_SECURITY` | `starttls` | `starttls` or `ssl` |
 | `PROTON_QUOTE_LANG` | `en` | Language of the "On … wrote:" line in replies: `en` or `fr` |
 | `PROTON_SENDER_NAME` | *(from Sent)* | Name shown in `From`. Bridge doesn't add the display name from Proton's settings, so by default the server reuses the one on your recent messages in Sent; set it empty for the bare address |
+| `PROTON_FROM_ADDRESSES` | *(none)* | Extra addresses of your account allowed as `from_address`, comma-separated. The Bridge login and the addresses you've sent from (found in Sent) are always allowed; any other address is refused. Replies default to the address the original was sent to |
 | `PROTON_ENABLE_SEND` | `true` | `false` removes `send_email`: the server becomes strictly read-only |
 
 The config file holds your Bridge password: keep it readable by you only.

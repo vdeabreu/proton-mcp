@@ -46,6 +46,10 @@ Windows the `PYTHONPATH` separator is `;`.
   only when sending is enabled (`PROTON_ENABLE_SEND` locally, `ENABLE_SEND`
   remotely, off by default there), and its docstring and `INSTRUCTIONS` tell the
   model to get the user's approval of the exact text first.
+- **Only the user's own addresses send.** In combined mode Bridge accepts any
+  `MAIL FROM`, so `_choose_sender` checks `from_address` against
+  `_sender_addresses()` (Bridge login, `PROTON_FROM_ADDRESSES`, addresses in
+  Sent) and refuses anything else.
 - **Email content is untrusted.** It can carry prompt injection. `_TextExtractor`
   drops hidden HTML (display:none, font-size:0, `hidden`…); don't add features
   that act on instructions found in a message.
@@ -67,6 +71,9 @@ Windows the `PYTHONPATH` separator is `;`.
 - **Bridge doesn't add the display name.** It sends `From` exactly as given, and
   IMAP can't read the display name set in Proton's settings. The server uses
   `PROTON_SENDER_NAME`, else the most frequent name in recent `Sent` messages.
+- **One Bridge login covers every address** (combined mode, the default): the
+  server can send from any of them by setting `From` and the envelope sender.
+  Bridge doesn't check that address at `MAIL FROM` time.
 - **Deliverability is outside the server's control.** SPF, DKIM and DMARC are
   handled by Proton for the sender's domain. Messages go out from Proton's shared
   IPs, so IP-based tools (Microsoft SNDS) don't apply.
