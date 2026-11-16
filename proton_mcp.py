@@ -10,6 +10,8 @@ Configuration (environment variables):
     PROTON_SMTP_SECURITY    starttls (Bridge default) or ssl
     PROTON_QUOTE_LANG       language of the "On <date>, <sender> wrote:" line in replies: en (default) or fr
     PROTON_ENABLE_SEND      register send_email: true (default) or false
+    PROTON_SENDER_NAME      display name in From ("Name <address>"); by default it is taken
+                            from your recent messages in Sent (Proton's own apps set it)
 
 Every mailbox is opened with EXAMINE and bodies are fetched with BODY.PEEK,
 so nothing is ever marked as read, moved or deleted. Text arguments that reach
@@ -31,7 +33,8 @@ import ssl
 import time
 from datetime import date
 from email.message import EmailMessage
-from email.utils import formatdate, getaddresses, make_msgid, parsedate_to_datetime
+from email.headerregistry import Address
+from email.utils import formatdate, getaddresses, make_msgid, parseaddr, parsedate_to_datetime
 from html.parser import HTMLParser
 
 from mcp.server.mcpserver import MCPServer
@@ -591,10 +594,71 @@ def _quote_original(original: email.message.EmailMessage) -> tuple[str, str]:
     return plain, html_part
 
 
+# --- sender display name ---
+#
+# Bridge sends the From header exactly as given: unlike Proton's web and mobile
+# apps, it does not add the display name set in Proton's settings, and IMAP has
+# no way to read that setting. Desktop clients (Thunderbird, Apple Mail) ask for
+# "your name" at setup for the same reason. Here it comes from PROTON_SENDER_NAME,
+# or else from the From header of your recent messages in Sent.
+
+SENT_FOLDER = "Sent"
+_SENDER_NAME_SCAN = 50
+_sender_name_cache: dict[str, str | None] = {}
+
+
+def _valid_name(name: str | None) -> str | None:
+    name = (name or "").strip()
+    if not name or len(name) > 100 or _CONTROL_RE.search(name) or "@" in name:
+        return None
+    return name
+
+
+def _pick_sender_name(from_headers: list[str], own_address: str) -> str | None:
+    """Most frequent display name on the user's own address, else on any address in Sent."""
+    own, other = {}, {}
+    for header in from_headers:
+        name, addr = parseaddr(header)
+        name = _valid_name(name)
+        if name:
+            bucket = own if addr.lower() == own_address.lower() else other
+            bucket[name] = bucket.get(name, 0) + 1
+    for bucket in (own, other):
+        if bucket:
+            return max(bucket, key=bucket.get)
+    return None
+
+
+def _sender_name(sender: str) -> str | None:
+    configured = os.environ.get("PROTON_SENDER_NAME")
+    if configured is not None:
+        return _valid_name(configured)
+    if sender not in _sender_name_cache:
+        try:
+            with _imap() as conn:
+                _examine(conn, SENT_FOLDER)
+                typ, data = conn.uid("SEARCH", None, "ALL")
+                uids = data[0].split()[-_SENDER_NAME_SCAN:] if typ == "OK" and data and data[0] else []
+                headers = []
+                if uids:
+                    typ, resp = conn.uid("FETCH", b",".join(uids).decode(), "(BODY.PEEK[HEADER.FIELDS (FROM)])")
+                    for part in resp if typ == "OK" else []:
+                        if isinstance(part, tuple):
+                            headers.append(str(email.message_from_bytes(part[1], policy=email.policy.default)["From"]))
+            _sender_name_cache[sender] = _pick_sender_name(headers, sender)
+        except (ToolError, imaplib.IMAP4.error, OSError):
+            return None  # don't block sending; try again next time
+    return _sender_name_cache[sender]
+
+
+def _from_header(sender: str, name: str | None) -> Address | str:
+    return Address(display_name=name, addr_spec=sender) if name else sender
+
+
 def _build_message(
     sender: str, to: str, subject: str, body: str,
     cc: str | None, bcc: str | None, original: email.message.EmailMessage | None,
-    include_original: bool = False,
+    include_original: bool = False, sender_name: str | None = None,
 ) -> tuple[EmailMessage, list[str]]:
     for field, value in (("subject", subject), ("to", to), ("cc", cc), ("bcc", bcc)):
         if value and re.search(r"[\r\n\x00]", value):
@@ -604,7 +668,7 @@ def _build_message(
         raise ToolError("At least one recipient is required in 'to'")
 
     msg = EmailMessage()
-    msg["From"] = sender
+    msg["From"] = _from_header(sender, sender_name)
     msg["To"] = to
     if cc:
         msg["Cc"] = cc
@@ -665,7 +729,9 @@ def send_email(
                 raise ToolError(f"Email uid {reply_to_uid} not found in {reply_folder!r}")
             original = email.message_from_bytes(data[0][1], policy=email.policy.default)
 
-    msg, recipients = _build_message(sender, to, subject, body, cc, bcc, original, include_original)
+    msg, recipients = _build_message(
+        sender, to, subject, body, cc, bcc, original, include_original, _sender_name(sender)
+    )
     with _smtp() as conn:
         try:
             refused = conn.send_message(msg, from_addr=sender, to_addrs=recipients)
@@ -673,6 +739,7 @@ def send_email(
             raise ToolError(f"Sending failed: {exc}") from exc
     return {
         "sent": True,
+        "from": str(msg["From"]),
         "message_id": msg["Message-ID"],
         "to": to,
         "cc": cc,

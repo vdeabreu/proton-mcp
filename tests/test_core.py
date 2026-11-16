@@ -171,3 +171,55 @@ def test_body_text_prefers_plain_and_converts_html():
 
 def test_imap_date():
     assert p._imap_date("2026-11-09") == "09-Nov-2026"
+
+
+# --- sender display name ---
+
+def test_from_header_with_display_name():
+    msg, _ = p._build_message(SENDER, "a@b.fr", "Hi", "x", None, None, None, sender_name="Hélène D'Arc")
+    raw = msg.as_bytes()
+    parsed = email.message_from_bytes(raw, policy=email.policy.default)
+    assert parsed["From"].addresses[0].display_name == "Hélène D'Arc"
+    assert parsed["From"].addresses[0].addr_spec == SENDER
+
+
+def test_from_header_without_name_is_bare_address():
+    msg, _ = p._build_message(SENDER, "a@b.fr", "Hi", "x", None, None, None)
+    assert str(msg["From"]) == SENDER
+
+
+def test_pick_sender_name_prefers_own_address():
+    headers = [
+        "Victor Pro <victor@work.fr>", "Victor Pro <victor@work.fr>", "Victor Pro <victor@work.fr>",
+        f"Victor De Abreu <{SENDER.upper()}>", SENDER,
+    ]
+    assert p._pick_sender_name(headers, SENDER) == "Victor De Abreu"
+
+
+def test_pick_sender_name_falls_back_to_other_addresses():
+    assert p._pick_sender_name([SENDER, "Jane Doe <jane@alias.me>"], SENDER) == "Jane Doe"
+    assert p._pick_sender_name([SENDER, "x@y.fr"], SENDER) is None
+
+
+@pytest.mark.parametrize("bad", ["", "   ", "a\r\nBcc: x@y.fr", "evil@attacker.com", "x" * 101])
+def test_invalid_names_ignored(bad):
+    assert p._valid_name(bad) is None
+
+
+def test_sender_name_from_env(monkeypatch):
+    monkeypatch.setenv("PROTON_SENDER_NAME", " Jane Doe ")
+    assert p._sender_name(SENDER) == "Jane Doe"
+    monkeypatch.setenv("PROTON_SENDER_NAME", "")
+    assert p._sender_name(SENDER) is None
+
+
+def test_sender_name_lookup_failure_does_not_block(monkeypatch):
+    monkeypatch.delenv("PROTON_SENDER_NAME", raising=False)
+    monkeypatch.setattr(p, "_sender_name_cache", {})
+
+    def boom():
+        raise ToolError("Bridge down")
+
+    monkeypatch.setattr(p, "_imap", boom)
+    assert p._sender_name(SENDER) is None
+    assert SENDER not in p._sender_name_cache

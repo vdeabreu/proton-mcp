@@ -89,6 +89,7 @@ and restart Claude Desktop after editing the file.
 | `PROTON_SMTP_PORT` | `1025` | |
 | `PROTON_SMTP_SECURITY` | `starttls` | `starttls` or `ssl` |
 | `PROTON_QUOTE_LANG` | `en` | Language of the "On … wrote:" line in replies: `en` or `fr` |
+| `PROTON_SENDER_NAME` | *(from Sent)* | Name shown in `From`. Bridge doesn't add the display name from Proton's settings, so by default the server reuses the one on your recent messages in Sent; set it empty for the bare address |
 | `PROTON_ENABLE_SEND` | `true` | `false` removes `send_email`: the server becomes strictly read-only |
 
 The config file holds your Bridge password: keep it readable by you only.
