@@ -14,7 +14,7 @@ claude.ai ──HTTPS──> reverse proxy :443 (mcp.example.com) ──> 127.0.
 - Each claude.ai connection goes through an OAuth password page (`MCP_PASSWORD`).
   After 5 wrong passwords in 15 minutes, login is locked for 15 minutes.
 - `/mcp` only accepts Anthropic's outbound IP ranges (reverse proxy rule).
-- `send_email` is **not exposed** unless `ENABLE_SEND=true`.
+- `send_email` (and `list_sender_addresses`) are **not exposed** unless `ENABLE_SEND=true`.
 - Each tool call is logged (tool and arguments, never the email body):
   `docker logs proton-mcp`.
 
@@ -135,7 +135,12 @@ authorization link someone sends you would connect *their* account.
 ## Enable sending
 
 Set `ENABLE_SEND=true` in `.env`, then `docker compose up -d`. In claude.ai, keep
-`send_email` on "needs approval" in the connector's tool permissions.
+`send_email` on "needs approval" in the connector's tool permissions. Start a new
+conversation (or reconnect the connector) for the new tools to show up.
+
+Mail goes out from the Bridge login by default; `list_sender_addresses` shows the
+other addresses you can send from. An address you've never sent from isn't found
+automatically: add it to `PROTON_FROM_ADDRESSES` in `.env`.
 
 ## Hardening checklist
 

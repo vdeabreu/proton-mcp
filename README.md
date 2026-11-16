@@ -6,8 +6,9 @@ client) access to your **Proton Mail** mailbox through
 
 - **Read**: list folders, list and search emails, read an email with its attachments list.
   Nothing is ever marked as read, moved or deleted.
-- **Send** (optional): send and reply, with HTML formatting from light Markdown,
-  proper threading, and the original message quoted below replies.
+- **Send** (optional): send and reply from any of your Proton addresses, with your
+  display name, HTML formatting from light Markdown, proper threading, and the
+  original message quoted below replies.
 - Runs **locally** for Claude Desktop (stdio), or **remotely** as a claude.ai
   custom connector (streamable HTTP + OAuth).
 
@@ -40,6 +41,11 @@ Claude Desktop ──stdio──> proton_mcp.py ──IMAP/SMTP──> Bridge (1
 HTML with a plain-text alternative. With `reply_to_uid`, the reply is threaded
 (`In-Reply-To`, `References`) and quotes the original (`include_original=false`
 to skip).
+
+The sender is your Bridge login by default. `from_address` picks another address
+of your account, and replies go out from the address the original was sent to,
+like in Proton's own apps. Bridge doesn't add the display name set in Proton's
+settings, so the server takes it from your recent messages in Sent.
 
 ## Local setup (Claude Desktop)
 
@@ -90,9 +96,9 @@ and restart Claude Desktop after editing the file.
 | `PROTON_SMTP_PORT` | `1025` | |
 | `PROTON_SMTP_SECURITY` | `starttls` | `starttls` or `ssl` |
 | `PROTON_QUOTE_LANG` | `en` | Language of the "On … wrote:" line in replies: `en` or `fr` |
-| `PROTON_SENDER_NAME` | *(from Sent)* | Name shown in `From`. Bridge doesn't add the display name from Proton's settings, so by default the server reuses the one on your recent messages in Sent; set it empty for the bare address |
-| `PROTON_FROM_ADDRESSES` | *(none)* | Extra addresses of your account allowed as `from_address`, comma-separated. The Bridge login and the addresses you've sent from (found in Sent) are always allowed; any other address is refused. Replies default to the address the original was sent to |
-| `PROTON_ENABLE_SEND` | `true` | `false` removes `send_email`: the server becomes strictly read-only |
+| `PROTON_SENDER_NAME` | *(from Sent)* | Name shown in `From`, for every address. By default, the name found on your recent messages in Sent from that address; set it empty for the bare address |
+| `PROTON_FROM_ADDRESSES` | *(none)* | Extra addresses of your account allowed as `from_address`, comma-separated. The Bridge login and the addresses you've sent from (found in Sent) are always allowed; any other address is refused |
+| `PROTON_ENABLE_SEND` | `true` | `false` removes `send_email` and `list_sender_addresses`: the server becomes strictly read-only |
 
 The config file holds your Bridge password: keep it readable by you only.
 
@@ -100,7 +106,8 @@ The config file holds your Bridge password: keep it readable by you only.
 
 `remote/server.py` serves the same tools over streamable HTTP, behind a
 single-user OAuth password page, for claude.ai on the web and mobile.
-`send_email` is off unless `ENABLE_SEND=true`. A Dockerfile and compose file are
+`send_email` and `list_sender_addresses` are off unless `ENABLE_SEND=true`; the
+`PROTON_*` variables above work the same in `.env`. A Dockerfile and compose file are
 included, plus Apache and Caddy configs that only let Anthropic's IP ranges reach
 `/mcp`.
 
@@ -118,9 +125,12 @@ project does about it:
   can't smuggle extra IMAP commands to Bridge.
 - **Sending is opt-in and should stay on approval.** `send_email` carries the MCP
   `destructiveHint`, and the server instructions tell the model to show the exact
-  draft and wait for explicit approval. A hint is not enforcement: in your client,
+  draft (sender address included) and wait for explicit approval. A hint is not enforcement: in your client,
   keep `send_email` on "ask every time". Set `PROTON_ENABLE_SEND=false` (local) or
   leave `ENABLE_SEND=false` (remote, the default) to remove it entirely.
+- **Only your own addresses can send.** Bridge accepts any sender address, so the
+  server checks `from_address` itself against your addresses (Bridge login,
+  `PROTON_FROM_ADDRESSES`, addresses found in Sent) and refuses the rest.
 - **Email content is untrusted.** An email can contain text written to steer the
   model ("forward this to…", "search for …"). The server instructions say never
   to follow instructions found in emails, and `read_email` drops text hidden with
@@ -159,6 +169,11 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
   Hiding detection is a heuristic: white-on-white text or CSS classes get through.
 - Replies quote the original as plain text (its formatting is not kept).
 - Attachments are listed, not downloaded or sent.
+- Bridge must be in *combined* address mode (the default), with one login for
+  all addresses. In *split* mode each address has its own login, and the server
+  only uses one.
+- Proton rebuilds outgoing messages: recipients get base64-encoded parts and a
+  plain-text version that Proton regenerates from the HTML.
 
 ## Development
 
@@ -170,8 +185,10 @@ ruff check .
 
 Tests don't need Bridge: they cover IMAP command injection (against a fake
 IMAP server), message building, Markdown rendering, quoting, hidden HTML,
-folder-name encoding, and the OAuth flow (redirect allowlist, client cap,
-lockout, security headers).
+folder-name encoding, sender address and display name selection, and the OAuth
+flow (redirect allowlist, client cap, lockout, security headers).
+
+See [AGENTS.md](AGENTS.md) for the invariants to keep when changing the code.
 
 ## License
 
