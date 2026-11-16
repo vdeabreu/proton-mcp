@@ -53,6 +53,8 @@ Windows the `PYTHONPATH` separator is `;`.
   (`_check_listen_host`); OAuth registration only accepts the claude.ai callback
   URLs; the login page sends anti-framing headers. Logs record tool names and
   arguments but never message bodies.
+- **Private data directory.** `Store` creates the directory 0700 and the SQLite
+  file 0600: it holds OAuth tokens.
 
 ## Proton and Bridge behaviour (learned the hard way)
 

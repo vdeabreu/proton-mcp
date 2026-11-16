@@ -180,3 +180,9 @@ def test_logs_use_resolved_client_ip_not_raw_header(setup, caplog):
         client.post("/login", data={"req": new_request(), "password": "wrong"},
                     headers={"X-Forwarded-For": "1.2.3.4"})
     assert "1.2.3.4" not in caplog.text
+
+
+def test_store_is_private(tmp_path):
+    auth.Store(tmp_path / "sub" / "db.sqlite")
+    assert (tmp_path / "sub").stat().st_mode & 0o777 == 0o700
+    assert (tmp_path / "sub" / "db.sqlite").stat().st_mode & 0o777 == 0o600

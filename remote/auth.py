@@ -71,7 +71,10 @@ log = logging.getLogger("proton-mcp.auth")
 
 class Store:
     def __init__(self, path: Path):
-        path.parent.mkdir(parents=True, exist_ok=True)
+        # OAuth tokens live here: owner-only directory and file, whatever the umask.
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        path.touch(mode=0o600, exist_ok=True)
+        path.chmod(0o600)
         self.db = sqlite3.connect(path, check_same_thread=False)
         self.db.execute("CREATE TABLE IF NOT EXISTS kv (kind TEXT, key TEXT, value TEXT, PRIMARY KEY (kind, key))")
         self.db.commit()
