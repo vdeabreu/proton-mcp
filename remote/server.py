@@ -7,6 +7,7 @@ Reuses the tools from proton_mcp.py unchanged. Differences from the local stdio 
 """
 
 import functools
+import ipaddress
 import logging
 import os
 import time
@@ -20,7 +21,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 import proton_mcp as core
-from auth import SCOPE, PasswordOAuthProvider, Store
+from auth import DEFAULT_REDIRECT_URIS, SCOPE, PasswordOAuthProvider, Store
 
 # The mcp library configures the root logger first, so ours get their own handler.
 _handler = logging.StreamHandler()
@@ -36,9 +37,26 @@ ENABLE_SEND = os.environ.get("ENABLE_SEND", "false").strip().lower() in ("1", "t
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 LISTEN_HOST = os.environ.get("LISTEN_HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8766"))
+ALLOWED_REDIRECT_URIS = os.environ.get("ALLOWED_REDIRECT_URIS", ",".join(DEFAULT_REDIRECT_URIS)).split(",")
 
+
+def _check_listen_host(host: str) -> None:
+    """The server speaks plain HTTP: it must sit behind a TLS reverse proxy on the same machine."""
+    try:
+        loopback = host == "localhost" or ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        loopback = False
+    if not loopback and os.environ.get("ALLOW_NON_LOOPBACK_LISTEN", "").lower() not in ("1", "true", "yes"):
+        raise SystemExit(
+            f"LISTEN_HOST={host!r} is not a loopback address. The server speaks plain HTTP; keep it on "
+            "127.0.0.1 behind a reverse proxy, or set ALLOW_NON_LOOPBACK_LISTEN=true if a private "
+            "container network isolates it."
+        )
+
+
+_check_listen_host(LISTEN_HOST)
 store = Store(DATA_DIR / "proton-mcp.sqlite")
-provider = PasswordOAuthProvider(store, os.environ["MCP_PASSWORD"], PUBLIC_URL)
+provider = PasswordOAuthProvider(store, os.environ["MCP_PASSWORD"], PUBLIC_URL, ALLOWED_REDIRECT_URIS)
 
 mcp = MCPServer(
     name="proton-mail",

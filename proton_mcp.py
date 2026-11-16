@@ -9,10 +9,13 @@ Configuration (environment variables):
     PROTON_SMTP_PORT        default 1025
     PROTON_SMTP_SECURITY    starttls (Bridge default) or ssl
     PROTON_QUOTE_LANG       language of the "On <date>, <sender> wrote:" line in replies: en (default) or fr
+    PROTON_ENABLE_SEND      register send_email: true (default) or false
 
 Every mailbox is opened with EXAMINE and bodies are fetched with BODY.PEEK,
-so nothing is ever marked as read, moved or deleted. The only write is
-send_email, flagged destructive so the client asks before each call.
+so nothing is ever marked as read, moved or deleted. Text arguments that reach
+IMAP are rejected if they contain control characters, so they can't smuggle
+extra IMAP commands. The only write is send_email, flagged destructive so that
+clients which honour the hint ask before each call.
 """
 
 import base64
@@ -40,6 +43,7 @@ PORT = int(os.environ.get("PROTON_IMAP_PORT", "1143"))
 SECURITY = os.environ.get("PROTON_IMAP_SECURITY", "starttls").lower()
 SMTP_PORT = int(os.environ.get("PROTON_SMTP_PORT", "1025"))
 SMTP_SECURITY = os.environ.get("PROTON_SMTP_SECURITY", "starttls").lower()
+ENABLE_SEND = os.environ.get("PROTON_ENABLE_SEND", "true").strip().lower() in ("1", "true", "yes")
 READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
 SENDS_MAIL = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=True)
 
@@ -90,8 +94,23 @@ def _encode_mutf7(name: str) -> str:
 
 
 def _quote(mailbox: str) -> str:
-    encoded = _encode_mutf7(mailbox).replace("\\", "\\\\").replace('"', '\\"')
+    encoded = _encode_mutf7(_clean("folder", mailbox)).replace("\\", "\\\\").replace('"', '\\"')
     return f'"{encoded}"'
+
+
+_CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _clean(field: str, value: str) -> str:
+    """Reject control characters in text that goes into an IMAP command.
+
+    imaplib sends arguments as-is: a CR/LF inside a quoted search term would end
+    the command and let the rest run as new IMAP commands (SELECT, MOVE, DELETE…),
+    which a prompt-injected model could be steered into.
+    """
+    if _CONTROL_RE.search(value):
+        raise ToolError(f"{field} must not contain control characters (line breaks, tabs...)")
+    return value
 
 
 # --- connection ---
@@ -155,24 +174,53 @@ def _examine(conn: imaplib.IMAP4, folder: str) -> None:
 
 # --- message parsing ---
 
+_VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+_HIDDEN_STYLE_RE = re.compile(r"display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(?![.\d])|"
+                              r"max-height\s*:\s*0(?![.\d])|opacity\s*:\s*0(?![.\d])", re.I)
+
+
 class _TextExtractor(HTMLParser):
+    """HTML to text, dropping scripts, styles and elements hidden from the reader.
+
+    Hidden text (display:none, font-size:0…) is a common way to slip instructions
+    to an AI that the human never sees. This catches the usual tricks, not all of
+    them (white-on-white text, off-screen positioning, CSS classes).
+    """
+
     def __init__(self):
         super().__init__()
         self.parts: list[str] = []
-        self._skip = 0
+        self._skip_tag: str | None = None  # tag that opened the skipped subtree
+        self._skip_depth = 0  # nesting of that same tag name inside it
 
     def handle_starttag(self, tag, attrs):
-        if tag in ("script", "style"):
-            self._skip += 1
-        elif tag in ("br", "p", "div", "tr", "li", "h1", "h2", "h3"):
+        if self._skip_tag == "head" and tag == "body":
+            self._skip_tag = None  # tolerate a missing </head>
+        if self._skip_tag:
+            if tag == self._skip_tag:
+                self._skip_depth += 1
+            return
+        attributes = dict(attrs)
+        hidden = (
+            tag in ("script", "style", "head", "title", "template")
+            or "hidden" in attributes
+            or bool(_HIDDEN_STYLE_RE.search(attributes.get("style") or ""))
+        )
+        if hidden:
+            if tag not in _VOID_TAGS:
+                self._skip_tag, self._skip_depth = tag, 1
+            return
+        if tag in ("br", "p", "div", "tr", "li", "h1", "h2", "h3"):
             self.parts.append("\n")
 
     def handle_endtag(self, tag):
-        if tag in ("script", "style") and self._skip:
-            self._skip -= 1
+        if self._skip_tag and tag == self._skip_tag:
+            self._skip_depth -= 1
+            if self._skip_depth == 0:
+                self._skip_tag = None
 
     def handle_data(self, data):
-        if not self._skip:
+        if not self._skip_tag:
             self.parts.append(data)
 
 
@@ -331,6 +379,7 @@ def search_emails(
     for key, value in (("FROM", from_), ("TO", to), ("SUBJECT", subject), ("TEXT", text)):
         if not value:
             continue
+        _clean(key.lower(), value)
         if value.isascii():
             criteria += [key, '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"']
         else:
@@ -547,6 +596,9 @@ def _build_message(
     cc: str | None, bcc: str | None, original: email.message.EmailMessage | None,
     include_original: bool = False,
 ) -> tuple[EmailMessage, list[str]]:
+    for field, value in (("subject", subject), ("to", to), ("cc", cc), ("bcc", bcc)):
+        if value and re.search(r"[\r\n\x00]", value):
+            raise ToolError(f"{field} must be a single line (no line breaks)")
     recipients = _addresses("to", to) + _addresses("cc", cc) + _addresses("bcc", bcc)
     if not _addresses("to", to):
         raise ToolError("At least one recipient is required in 'to'")
@@ -575,7 +627,6 @@ def _build_message(
     return msg, recipients
 
 
-@mcp.tool(annotations=SENDS_MAIL)
 def send_email(
     to: str,
     subject: str,
@@ -629,6 +680,10 @@ def send_email(
         "subject": subject,
         "refused_recipients": {k: v[1].decode(errors="replace") for k, v in refused.items()},
     }
+
+
+if ENABLE_SEND:
+    mcp.tool(annotations=SENDS_MAIL)(send_email)
 
 
 if __name__ == "__main__":

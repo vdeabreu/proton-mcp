@@ -29,7 +29,14 @@ your mail provider (`mail.` often is).
 ## 2. Proton Mail Bridge (headless)
 
 Bridge requires a paid Proton plan. Download the Linux package from the official
-page, https://proton.me/mail/bridge, then:
+page, https://proton.me/mail/bridge.
+
+**Verify the package before installing it.** Unlike Windows and macOS, Linux
+packages aren't checked automatically: follow Proton's guide,
+https://proton.me/support/verifying-bridge-package (`debsig-verify` for the
+.deb, `rpm --checksig` for the .rpm). Don't install a package that fails the check.
+
+Then:
 
 ```bash
 sudo apt install ./protonmail-bridge_*_amd64.deb pass
@@ -47,6 +54,13 @@ If Bridge says *"not able to detect a supported password manager"*, `pass` isn't
 initialized yet: exit, run the `gpg` and `pass init` lines, delete
 `~/.config/protonmail/bridge-v3/insecure` (unencrypted vault created on the
 failed start, only if no account is logged in yet), and start again.
+
+**About the passphrase-less key.** Bridge stores its vault key in `pass`, which
+encrypts it with this GPG key. Without a passphrase, the service can start at
+boot with nobody to type it, but anyone who gets a shell as this user (or root)
+can read the vault and use your mailbox. To narrow that, run Bridge under a
+dedicated account with no SSH login, and keep that account out of the `docker`
+group (membership in `docker` is equivalent to root).
 
 Run Bridge as a user service that starts at boot:
 
@@ -86,6 +100,12 @@ curl -s http://127.0.0.1:8766/health
 
 The container runs as uid 1000; if your user has another uid, `chown 1000 data`.
 
+The container uses the host network because Bridge only listens on the host's
+127.0.0.1. The side effect: if the server were compromised, it could also reach
+every other service listening on the host's loopback. Don't run other sensitive
+local-only services on the same machine, or put them behind their own
+authentication.
+
 ## 4. Reverse proxy + certificate
 
 Pick one, and replace `mcp.example.com` with your domain:
@@ -105,7 +125,12 @@ curl -s https://mcp.example.com/.well-known/oauth-protected-resource/mcp        
 ## 5. claude.ai
 
 Settings → Connectors → Add custom connector → `https://mcp.example.com/mcp`.
-The password page opens: type `MCP_PASSWORD`. The four read tools appear.
+The password page opens, saying that **Claude** asks for access and that the
+authorization goes to **claude.ai**. Type `MCP_PASSWORD`. The four read tools
+appear.
+
+Only type the password on a page you opened by clicking *Connect* yourself: an
+authorization link someone sends you would connect *their* account.
 
 ## Enable sending
 
@@ -120,11 +145,17 @@ Set `ENABLE_SEND=true` in `.env`, then `docker compose up -d`. In claude.ai, kee
   on the host exposes services you didn't mean to (`ss -tlnp`, and a port scan
   from outside).
 - Look at the logs now and then: `docker logs proton-mcp | grep proton-mcp`.
-  An unknown `login ok` or a burst of `wrong password` deserves attention.
+  An unknown `login ok`, a burst of `wrong password` or `registration refused`
+  deserves attention.
+- If login says *"Too many attempts"* although you typed nothing wrong, someone
+  is failing on purpose to lock you out. Wait 15 minutes, or restart the
+  container (`docker compose restart`) to reset the counter. Existing claude.ai
+  sessions are not affected.
 
 ## Revoke access
 
 - Stop everything: `docker compose down`.
-- Revoke all claude.ai tokens: delete `data/proton-mcp.sqlite`, then restart.
+- Revoke all claude.ai tokens: `docker compose down`, delete `data/proton-mcp.sqlite`,
+  then `docker compose up -d` (and reconnect the connector).
 - Cut mailbox access entirely: `protonmail-bridge --cli` → `logout`, or revoke
   the Bridge session in Proton → Settings → Security.

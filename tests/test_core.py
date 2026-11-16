@@ -79,7 +79,7 @@ def test_bcc_only_in_envelope():
 
 
 def test_header_injection_rejected():
-    with pytest.raises(ValueError):
+    with pytest.raises(ToolError):
         p._build_message(SENDER, "a@b.fr", "Hi\r\nBcc: evil@x.com", "x", None, None, None)
 
 
