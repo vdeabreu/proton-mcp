@@ -14,6 +14,10 @@ when changing it.
 - `Dockerfile` and `compose.yml` at the root, because the image copies files from
   both the root and `remote/`.
 - `deploy/`: example reverse-proxy configs. `docs/deploy.md`: the full server guide.
+- `pyproject.toml` packages `proton_mcp.py` alone (`py-modules`), with the
+  `proton-mcp` command: the PyPI package is the local stdio server. `remote/` is
+  not in it; remote mode runs from a git checkout or the Docker image.
+- `server.json`: the MCP Registry entry. `.github/workflows/release.yml`: publishing.
 
 ## Commands
 
@@ -37,6 +41,16 @@ publishes to PyPI (trusted publishing, environment `pypi`), then publishes
 `server.json` to the MCP Registry as `io.github.vdeabreu/proton-mcp` (GitHub OIDC). The
 registry checks ownership through the `mcp-name:` comment at the top of the
 README: keep it.
+
+- A version published on PyPI is permanent: never move or reuse a tag. If the
+  registry step fails after PyPI succeeded, re-run that job, don't re-tag.
+- The workflow writes the tag's version into `server.json`; the version committed
+  there doesn't need bumping.
+- The README is also the PyPI page: use absolute GitHub URLs for links to repo
+  files, relative ones break on PyPI.
+- A new environment variable goes in the README configuration table,
+  `.env.example`, and `server.json` (`environmentVariables`, `isSecret` for
+  credentials).
 
 ## Invariants: don't break these
 
@@ -99,3 +113,5 @@ README: keep it.
   headers or HTML parsing.
 - Dependencies and the Docker base image are pinned (image by digest, actions by
   SHA). Dependabot opens the update PRs.
+- Keep the repo generic: no personal domains, addresses, IPs or host names (use
+  `mcp.example.com`, `you@proton.me`).
