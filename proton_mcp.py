@@ -824,5 +824,9 @@ if ENABLE_SEND:
     mcp.tool(annotations=SENDS_MAIL)(send_email)
 
 
-if __name__ == "__main__":
+def main() -> None:
     mcp.run("stdio")
+
+
+if __name__ == "__main__":
+    main()

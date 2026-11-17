@@ -4,8 +4,24 @@ version = "0.1.0"
 description = "MCP server for Proton Mail through Proton Mail Bridge (local stdio or remote claude.ai connector)"
 readme = "README.md"
 license = "MIT"
+authors = [{ name = "Victor De Abreu" }]
 requires-python = ">=3.12"
 dependencies = ["mcp==2.3.0"]
+keywords = ["mcp", "mcp-server", "proton-mail", "protonmail", "proton-bridge", "email", "claude"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Communications :: Email",
+]
+
+[project.urls]
+Homepage = "https://github.com/vdeabreu/proton-mcp"
+Issues = "https://github.com/vdeabreu/proton-mcp/issues"
+
+[project.scripts]
+proton-mcp = "proton_mcp:main"
 
 [project.optional-dependencies]
 remote = ["uvicorn>=0.30"]

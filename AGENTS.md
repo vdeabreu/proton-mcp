@@ -29,6 +29,15 @@ server on 127.0.0.1. `server.py` reads its configuration at import time, so
 `tests/test_server.py` and the send-flag tests import it in a subprocess. On
 Windows the `PYTHONPATH` separator is `;`.
 
+## Releasing
+
+Bump `version` in `pyproject.toml`, commit, then push a tag `vX.Y.Z` with the same
+version. `.github/workflows/release.yml` checks the tag matches, runs the tests,
+publishes to PyPI (trusted publishing, environment `pypi`), then publishes
+`server.json` to the MCP Registry as `io.github.vdeabreu/proton-mcp` (GitHub OIDC). The
+registry checks ownership through the `mcp-name:` comment at the top of the
+README: keep it.
+
 ## Invariants: don't break these
 
 - **Read-only IMAP.** Folders are opened with EXAMINE (`select(readonly=True)`)
