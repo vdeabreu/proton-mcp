@@ -21,6 +21,10 @@ client) access to your **Proton Mail** mailbox through
 
 > Unofficial project, not affiliated with or endorsed by Proton AG.
 
+![proton-mcp demo: summarising today's mail, drafting a reply and sending it after approval](https://raw.githubusercontent.com/vdeabreu/proton-mcp/main/docs/demo.gif)
+
+<sub>Illustration with sample data, in a generic chat client. The tool names and the flow are the server's own.</sub>
+
 ## Why this one
 
 Several Proton Mail MCP servers exist. This one is built for a specific use:
