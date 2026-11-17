@@ -3,6 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/proton-mcp)](https://pypi.org/project/proton-mcp/)
 [![CI](https://github.com/vdeabreu/proton-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/vdeabreu/proton-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/vdeabreu/proton-mcp/blob/main/LICENSE)
+[![Glama score](https://glama.ai/mcp/servers/vdeabreu/proton-mcp/badges/score.svg)](https://glama.ai/mcp/servers/vdeabreu/proton-mcp)
 
 <!-- mcp-name: io.github.vdeabreu/proton-mcp -->
 
