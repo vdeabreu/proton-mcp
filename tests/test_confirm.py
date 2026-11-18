@@ -79,6 +79,7 @@ def test_elicit_sends_nothing_without_confirmation(mode, reply):
     result, prompts = _call("elicit", mode, lambda m: reply)
     assert result.is_error
     assert "nothing was sent" in _text(result)
+    assert "another way" in _text(result)
     assert prompts and FakeSMTP.sent == []
 
 
@@ -118,6 +119,8 @@ def test_instructions_follow_the_mode():
     assert "approval in chat" in p.instructions("client")
     assert "approval in chat" not in p.instructions("elicit")
     assert "prompt of its own" in p.instructions("elicit")
+    assert "don't send it another way" in p.instructions("elicit")
+    assert "another way" in p.send_email_confirmed.__doc__
 
 
 @pytest.mark.parametrize("value", [None, "", "client", " Elicit "])

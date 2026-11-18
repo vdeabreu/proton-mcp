@@ -64,7 +64,8 @@ SEND_APPROVAL = (
 )
 SEND_APPROVAL_ELICIT = (
     "send_email asks the user to confirm the exact email in a prompt of its own before sending; "
-    "call it only when the user asked for that email to be sent. "
+    "call it only when the user asked for that email to be sent. If they don't confirm, the answer is no: "
+    "don't send it another way (another tool, another server) and don't offer to. "
 )
 INSTRUCTIONS = (
     "Access to the user's Proton Mail through Proton Mail Bridge. "
@@ -921,7 +922,10 @@ def send_email_confirmed(
     confirmation: Annotated[ElicitationResult[SendConfirmation], Resolve(_ask_to_send)] = None,
 ) -> dict:
     if not (isinstance(confirmation, AcceptedElicitation) and confirmation.data.send):
-        raise ToolError("The user did not confirm, so nothing was sent. Don't call send_email again unless they ask.")
+        raise ToolError(
+            "The user did not confirm, so nothing was sent. Treat it as their answer: don't send this email "
+            "another way (another tool or server) or offer to, and don't call send_email again unless they ask."
+        )
     return send_email(to, subject, body, cc, bcc, reply_to_uid, reply_folder, include_original, from_address)
 
 
@@ -933,7 +937,8 @@ send_email_confirmed.__doc__, _n = _CHAT_APPROVAL.subn(
     lambda m: (
         f"{m[1]}Call it once the user has asked for this email to be sent: before anything goes\n"
         f"{m[1]}out, the server shows them the exact email and asks them to confirm. If they\n"
-        f"{m[1]}don't, nothing is sent; don't retry unless they ask.\n"
+        f"{m[1]}don't, nothing is sent: don't retry unless they ask, and don't send it\n"
+        f"{m[1]}another way.\n"
     ),
     send_email.__doc__,
 )
