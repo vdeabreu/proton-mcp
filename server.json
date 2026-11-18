@@ -33,6 +33,12 @@
           "name": "PROTON_ENABLE_SEND",
           "description": "Set to false for a strictly read-only server",
           "default": "true"
+        },
+        {
+          "name": "PROTON_SEND_CONFIRM",
+          "description": "client (default): your client's approval prompt guards sending. elicit: the server itself asks you to confirm each email, and refuses to send with clients that can't show that prompt",
+          "default": "client",
+          "choices": ["client", "elicit"]
         }
       ]
     }

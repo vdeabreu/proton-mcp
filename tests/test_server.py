@@ -40,3 +40,28 @@ def test_send_disabled_by_default_remotely(tmp_path):
 def test_send_enabled_remotely_on_request(tmp_path):
     r = _import_server(tmp_path, ENABLE_SEND="true")
     assert "send_email" in r.stdout
+
+
+def test_send_confirm_elicit_remotely(tmp_path):
+    full = {**os.environ, **BASE_ENV, "DATA_DIR": str(tmp_path), "ENABLE_SEND": "true", "PROTON_SEND_CONFIRM": "elicit",
+            "PYTHONPATH": os.pathsep.join([ROOT, os.path.join(ROOT, "remote")])}
+    code = (
+        "import server\n"
+        "from mcp.server.mcpserver.resolve import find_resolved_parameters\n"
+        "tool = next(t for t in server.mcp._tool_manager.list_tools() if t.name == 'send_email')\n"
+        "print(sorted(tool.parameters['properties']))\n"
+        "print(sorted(find_resolved_parameters(tool.fn)))\n"
+        "print(server.mcp.instructions)\n"
+    )
+    r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, env=full)
+    assert r.returncode == 0, r.stderr
+    schema, resolved, instructions = r.stdout.splitlines()[:3]
+    assert "confirmation" not in schema and "'to'" in schema
+    assert resolved == "['confirmation']"
+    assert "prompt of its own" in instructions
+
+
+def test_send_confirm_typo_refuses_to_start(tmp_path):
+    r = _import_server(tmp_path, ENABLE_SEND="true", PROTON_SEND_CONFIRM="elcit")
+    assert r.returncode != 0
+    assert "send confirmation mode" in r.stderr
