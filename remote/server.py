@@ -2,7 +2,8 @@
 
 Reuses the tools from proton_mcp.py unchanged. Differences from the local stdio server:
 - every request needs an OAuth token (password page, see auth.py);
-- send_email is only registered when ENABLE_SEND=true;
+- send_email is only registered when ENABLE_SEND=true (PROTON_SEND_CONFIRM=elicit makes
+  the server itself ask the user before each send);
 - every tool call is logged (tool name and arguments, never the email body).
 """
 
@@ -61,7 +62,7 @@ provider = PasswordOAuthProvider(store, os.environ["MCP_PASSWORD"], PUBLIC_URL, 
 mcp = MCPServer(
     name="proton-mail",
     title="Proton Mail",
-    instructions=core.INSTRUCTIONS,
+    instructions=core.instructions(core.SEND_CONFIRM),
     auth_server_provider=provider,
     auth=AuthSettings(
         issuer_url=PUBLIC_URL,
@@ -98,7 +99,7 @@ for _fn in (core.list_folders, core.list_emails, core.search_emails, core.read_e
     mcp.tool(annotations=core.READ_ONLY)(audited(_fn))
 if ENABLE_SEND:
     mcp.tool(annotations=core.READ_ONLY)(audited(core.list_sender_addresses))
-    mcp.tool(annotations=core.SENDS_MAIL)(audited(core.send_email))
+    mcp.tool(name="send_email", annotations=core.SENDS_MAIL)(audited(core.send_tool(core.SEND_CONFIRM)))
 
 
 @mcp.custom_route("/login", methods=["GET", "POST"])
@@ -121,7 +122,7 @@ def main() -> None:
         ),
     )
     audit.info("starting on %s:%d, public %s, send %s", LISTEN_HOST, PORT, PUBLIC_URL,
-               "ENABLED" if ENABLE_SEND else "disabled")
+               f"ENABLED (confirm: {core.SEND_CONFIRM})" if ENABLE_SEND else "disabled")
     uvicorn.run(app, host=LISTEN_HOST, port=PORT, proxy_headers=True, forwarded_allow_ips="127.0.0.1")
 
 

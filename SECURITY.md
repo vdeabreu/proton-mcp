@@ -18,6 +18,8 @@ commit. You should get a first answer within a week.
 - Bypassing the OAuth login, the lockout or the token checks of the remote server.
 - Reaching Bridge on a non-loopback address, or leaking Bridge credentials.
 - Header injection or recipient smuggling in `send_email`.
+- With `PROTON_SEND_CONFIRM=elicit`: any way to send without the user confirming
+  that exact email in the server's prompt.
 
 ## Out of scope
 
@@ -25,3 +27,4 @@ commit. You should get a first answer within a week.
   (report them to their maintainers).
 - A model following instructions from an email when the user approved the
   resulting action: approval prompts are the defence there, keep them on.
+- A client that answers the server's confirmation prompt without asking the user.

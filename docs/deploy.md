@@ -138,6 +138,11 @@ Set `ENABLE_SEND=true` in `.env`, then `docker compose up -d`. In claude.ai, kee
 `send_email` on "needs approval" in the connector's tool permissions. Start a new
 conversation (or reconnect the connector) for the new tools to show up.
 
+To have the server itself ask you before each send, add `PROTON_SEND_CONFIRM=elicit`:
+it shows you the exact email and sends only if you confirm, whatever the connector's
+tool permissions say. If your client can't show that prompt, nothing is sent; see
+the README's Security section.
+
 Mail goes out from the Bridge login by default; `list_sender_addresses` shows the
 other addresses you can send from. An address you've never sent from isn't found
 automatically: add it to `PROTON_FROM_ADDRESSES` in `.env`.

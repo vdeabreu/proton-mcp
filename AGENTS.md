@@ -69,6 +69,12 @@ README: keep it.
   only when sending is enabled (`PROTON_ENABLE_SEND` locally, `ENABLE_SEND`
   remotely, off by default there), and its docstring and `INSTRUCTIONS` tell the
   model to get the user's approval of the exact text first.
+- **Opt-in server-side confirmation.** With `PROTON_SEND_CONFIRM=elicit`,
+  `send_tool()` returns `send_email_confirmed`, whose hidden `confirmation`
+  parameter is filled by the `_ask_to_send` resolver: an elicitation showing the
+  exact email, built by the same `_prepare` as the send. Anything but an accepted
+  `send=True` sends nothing, and a client without elicitation support is refused.
+  An unknown mode stops the server (`send_confirm_mode`) rather than falling back.
 - **Only the user's own addresses send.** In combined mode Bridge accepts any
   `MAIL FROM`, so `_choose_sender` checks `from_address` against
   `_sender_addresses()` (Bridge login, `PROTON_FROM_ADDRESSES`, addresses in

@@ -127,6 +127,7 @@ path to that script if it isn't on your `PATH`) and no `args`.
 | `PROTON_SENDER_NAME` | *(from Sent)* | Name shown in `From`, for every address. By default, the name found on your recent messages in Sent from that address; set it empty for the bare address |
 | `PROTON_FROM_ADDRESSES` | *(none)* | Extra addresses of your account allowed as `from_address`, comma-separated. The Bridge login and the addresses you've sent from (found in Sent) are always allowed; any other address is refused |
 | `PROTON_ENABLE_SEND` | `true` | `false` removes `send_email` and `list_sender_addresses`: the server becomes strictly read-only |
+| `PROTON_SEND_CONFIRM` | `client` | Who asks before a send. `client`: your client's approval prompt (keep it on "ask every time"). `elicit`: the server itself shows you the exact email and asks you to confirm, through an MCP elicitation the model can't answer; with a client that can't show it, nothing is sent. See [Security](#security) |
 
 The config file holds your Bridge password: keep it readable by you only.
 
@@ -156,6 +157,13 @@ project does about it:
   draft (sender address included) and wait for explicit approval. A hint is not enforcement: in your client,
   keep `send_email` on "ask every time". Set `PROTON_ENABLE_SEND=false` (local) or
   leave `ENABLE_SEND=false` (remote, the default) to remove it entirely.
+- **Optional: the server asks before each send.** With the default setup, a client
+  set to "always allow" lets any `send_email` call through. With
+  `PROTON_SEND_CONFIRM=elicit`, the server itself shows you the exact email (sender,
+  recipients, Bcc, subject, body) and sends only if you confirm. It uses an MCP
+  elicitation: the client puts the question to you, and the model can't answer it.
+  Clients don't all support elicitations yet; with one that doesn't, `send_email`
+  refuses and nothing is sent, so check yours before turning it on.
 - **Only your own addresses can send.** Bridge accepts any sender address, so the
   server checks `from_address` itself against your addresses (Bridge login,
   `PROTON_FROM_ADDRESSES`, addresses found in Sent) and refuses the rest.
